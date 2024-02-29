@@ -36,6 +36,7 @@ def empirical_dist(x, set):
 
     return np.sum(set <= x) / len(set)
 
+    
 
 def birth_death_dist(z, adj):
     
@@ -74,15 +75,55 @@ def death_square_diff(z, adj1, adj2):
     
     return square_diff
 
+def integrateSquareDiff(set1, set2):
+        winSize = 1 / np.gcd(len(set1), len(set2))
+        
+        res = 0
+        
+        cur = winSize
+        ind1 = 0
+        ind2 = 0
+        
+        nextStep1 = 1 / len(set1)
+        nextStep2 = 1 / len(set2)
+        
+        while cur <= 1:
+            
+            if cur > nextStep1:
+                ind1 += 1
+                nextStep1 += 1 / len(set1)
+            
+            if cur > nextStep2:
+                ind2 += 1
+                nextStep2 += 1 / len(set2)
+            
+            squareDiff = (set1[ind1] - set2[ind2]) ** 2
+            res += squareDiff * winSize
+            cur += winSize
 
-def top_loss_0(adj1, adj2):
-    res, error = integrate.quad(lambda x: birth_square_diff(x, adj1, adj2), 0, 1)
-    return res
+        return res
+        
+    
 
+def top_loss(adj1, adj2):
+    bs1, ds1 = get_birth_death_sets(adj1)
+    bs2, ds2 = get_birth_death_sets(adj2)
+    
+    
+    loss0 = integrateSquareDiff(bs1, bs2)
+    loss1 = integrateSquareDiff(ds1, ds2)
+    
+    return loss0, loss1
+    
+    
+    
+# def top_loss_0(adj1, adj2):
+#     res, error = integrate.quad(lambda x: birth_square_diff(x, adj1, adj2), 0, 1)
+#     return res
 
-def top_loss_1(adj1, adj2):
-    res, error = integrate.quad(lambda x: death_square_diff(x, adj1, adj2), 0, 1)
-    return res
+# def top_loss_1(adj1, adj2):
+#     res, error = integrate.quad(lambda x: death_square_diff(x, adj1, adj2), 0, 1)
+#     return res
 
 
     
@@ -109,7 +150,7 @@ for layer_num in tqdm.tqdm(range(12), "Calculating distances"):
         
         stereotypeFileName = PATH_TO_STEREOTYPE + stereotypeMatrixFiles[matrix_num]
         antistereotypeFileName = PATH_TO_ANTISTEREOTYPE + antistereotypeMatrixFiles[matrix_num]
-        irrelevantFileName = PATH_TO_IRRELEVANT + irrelevantMatrixFiles[matrix_num]
+        
         
         
         with open(stereotypeFileName, "rb") as f:
@@ -119,37 +160,52 @@ for layer_num in tqdm.tqdm(range(12), "Calculating distances"):
             antistereotypeMatrix = np.load(f)
             antistereotypeMatrix = antistereotypeMatrix.astype(float)
         
-        
-        with open(irrelevantFileName, "rb") as f:
-            irrelevantMatrix = np.load(f)
-            irrelevantMatrix = irrelevantMatrix.astype(float)
-        
     
         
-        stereotypeDist0 = top_loss_0(stereotypeMatrix, irrelevantMatrix)
-        stereotypeDist1 = top_loss_1(stereotypeMatrix, irrelevantMatrix)
-        antistereotypeDist0 = top_loss_0(antistereotypeMatrix, irrelevantMatrix)
-        antistereotypeDist1 = top_loss_1(antistereotypeMatrix, irrelevantMatrix)
+        averageStereotypeDist0 = 0
+        averageStereotypeDist1 = 0
+        averageAntistereotypeDist0 = 0
+        averageAntistereotypeDist1 = 0
+        
+        
+        for irrelevantMatrixNum in tqdm.tqdm(range(len(irrelevantMatrixFiles)), desc = "Calculating distances to irrelevant", leave = False):
+            irrelevantFileName = PATH_TO_IRRELEVANT + irrelevantMatrixFiles[irrelevantMatrixNum]
+            
+            with open(irrelevantFileName, "rb") as f:
+                irrelevantMatrix = np.load(f)
+                irrelevantMatrix = irrelevantMatrix.astype(float)
+            
+            stereotypeDist0, stereotypeDist1 = top_loss(stereotypeMatrix, irrelevantMatrix)
+            antistereotypeDist0, antistereotypeDist1 = top_loss(antistereotypeMatrix, irrelevantMatrix)
+            
+            averageStereotypeDist0 += stereotypeDist0
+            averageStereotypeDist1 += stereotypeDist1
+            
+            averageAntistereotypeDist0 += antistereotypeDist0
+            averageAntistereotypeDist1 += antistereotypeDist1
+        
+        averageStereotypeDist0 /= len(irrelevantMatrixFiles)
+        averageStereotypeDist1 /= len(irrelevantMatrixFiles)
+        averageAntistereotypeDist0 /= len(irrelevantMatrixFiles)
+        averageAntistereotypeDist1 /= len(irrelevantMatrixFiles)
         
         stereotypeDistDict = {
             "Matrix ID": "stereotype" + str(matrix_num),
-            "0D Dist": stereotypeDist0,
-            "1D Dist": stereotypeDist1,
+            "0D Dist": averageStereotypeDist0,
+            "1D Dist": averageStereotypeDist1,
         }
-        
-        antistereotypeDist0 = top_loss_0(antistereotypeMatrix, irrelevantMatrix)
-        antistereotypeDist1 = top_loss_1(antistereotypeMatrix, irrelevantMatrix)
         
         antistereotypeDistDict = {
             "Matrix ID": "antistereotype" + str(matrix_num),
-            "0D Dist": antistereotypeDist0,
-            "1D Dist": antistereotypeDist1,
+            "0D Dist": averageAntistereotypeDist0,
+            "1D Dist": averageAntistereotypeDist1,
         }
         
         distList.append(stereotypeDistDict)
         distList.append(antistereotypeDistDict)
+    
         
-        if matrix_num + 1 % SAVE_AFTER == 0:
+        if ((matrix_num + 1) % SAVE_AFTER) == 0:
             distDf = pd.DataFrame(distList)
             
             distDf.to_csv(PATH_TO_DATA + "experiment3/irrelevantDists/layer" + str(layer_num) + ".csv", index=False)

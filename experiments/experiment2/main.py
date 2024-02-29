@@ -122,6 +122,49 @@ def top_loss_1(adj1, adj2):
     res, error = integrate.quad(lambda x: death_square_diff(x, adj1, adj2), 0, 1)
     return res
 
+
+def integrateSquareDiff(set1, set2):
+        winSize = 1 / np.gcd(len(set1), len(set2))
+        
+        res = 0
+        
+        cur = winSize
+        ind1 = 0
+        ind2 = 0
+        
+        nextStep1 = 1 / len(set1)
+        nextStep2 = 1 / len(set2)
+        
+        while cur <= 1:
+            
+            if cur > nextStep1:
+                ind1 += 1
+                nextStep1 += 1 / len(set1)
+            
+            if cur > nextStep2:
+                ind2 += 1
+                nextStep2 += 1 / len(set2)
+            
+            squareDiff = (set1[ind1] - set2[ind2]) ** 2
+            res += squareDiff * winSize
+            cur += winSize
+
+        return res
+        
+    
+
+def top_loss(adj1, adj2):
+    bs1, ds1 = get_birth_death_sets(adj1)
+    bs2, ds2 = get_birth_death_sets(adj2)
+    
+    
+    loss0 = integrateSquareDiff(bs1, bs2)
+    loss1 = integrateSquareDiff(ds1, ds2)
+    
+    return loss0, loss1
+
+
+
 stereo_to_antistereo_dists = []
 stereo_to_unrelated_dists = []
 antistereo_to_unrelated_dists = []
@@ -181,13 +224,27 @@ for item in tqdm.tqdm(dataset, desc = "Processing dataset"):
     
     for layerNum in tqdm.tqdm(range(numLayers), desc = "Processing attention layers", leave = False):
     # for layerNum in range(numLayers):
-        stereo_to_antistereo_dist[layerNum][0] = top_loss_0(stereotypeAttention[layerNum].cpu().numpy(), antistereotypeAttention[layerNum].cpu().numpy())
-        stereo_to_unrelated_dist[layerNum][0] = top_loss_0(stereotypeAttention[layerNum].cpu().numpy(), unrelatedAttention[layerNum].cpu().numpy())
-        antistereo_to_unrelated_dist[layerNum][0] = top_loss_0(antistereotypeAttention[layerNum].cpu().numpy(), unrelatedAttention[layerNum].cpu().numpy())
+    
+    
+        stereo_to_antistereo_dist0, stereo_to_antistereo_dist1 = top_loss(stereotypeAttention[layerNum].cpu().numpy(), antistereotypeAttention[layerNum].cpu().numpy())
+        stereo_to_unrelated_dist0, stereo_to_unrelated_dist1 = top_loss(stereotypeAttention[layerNum].cpu().numpy(), unrelatedAttention[layerNum].cpu().numpy())
+        antistereo_to_unrelated_dist0, antistereo_to_unrelated_dist1 = top_loss(antistereotypeAttention[layerNum].cpu().numpy(), unrelatedAttention[layerNum].cpu().numpy())
         
-        stereo_to_antistereo_dist[layerNum][1] = top_loss_1(stereotypeAttention[layerNum].cpu().numpy(), antistereotypeAttention[layerNum].cpu().numpy())
-        stereo_to_unrelated_dist[layerNum][1] = top_loss_1(stereotypeAttention[layerNum].cpu().numpy(), unrelatedAttention[layerNum].cpu().numpy())
-        antistereo_to_unrelated_dist[layerNum][1] = top_loss_1(antistereotypeAttention[layerNum].cpu().numpy(), unrelatedAttention[layerNum].cpu().numpy())
+        stereo_to_antistereo_dist[layerNum][0] = stereo_to_antistereo_dist0
+        stereo_to_unrelated_dist[layerNum][0] = stereo_to_unrelated_dist0
+        antistereo_to_unrelated_dist[layerNum][0] = antistereo_to_unrelated_dist0
+        
+        stereo_to_antistereo_dist[layerNum][1] = stereo_to_antistereo_dist1
+        stereo_to_unrelated_dist[layerNum][1] = stereo_to_unrelated_dist1
+        antistereo_to_unrelated_dist[layerNum][1] = antistereo_to_unrelated_dist1
+        
+        # stereo_to_antistereo_dist[layerNum][0] = top_loss_0(stereotypeAttention[layerNum].cpu().numpy(), antistereotypeAttention[layerNum].cpu().numpy())
+        # stereo_to_unrelated_dist[layerNum][0] = top_loss_0(stereotypeAttention[layerNum].cpu().numpy(), unrelatedAttention[layerNum].cpu().numpy())
+        # antistereo_to_unrelated_dist[layerNum][0] = top_loss_0(antistereotypeAttention[layerNum].cpu().numpy(), unrelatedAttention[layerNum].cpu().numpy())
+        
+        # stereo_to_antistereo_dist[layerNum][1] = top_loss_1(stereotypeAttention[layerNum].cpu().numpy(), antistereotypeAttention[layerNum].cpu().numpy())
+        # stereo_to_unrelated_dist[layerNum][1] = top_loss_1(stereotypeAttention[layerNum].cpu().numpy(), unrelatedAttention[layerNum].cpu().numpy())
+        # antistereo_to_unrelated_dist[layerNum][1] = top_loss_1(antistereotypeAttention[layerNum].cpu().numpy(), unrelatedAttention[layerNum].cpu().numpy())
 
     stereo_to_antistereo_dists.append(stereo_to_antistereo_dist)
     stereo_to_unrelated_dists.append(stereo_to_unrelated_dist)
